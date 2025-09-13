@@ -1,0 +1,96 @@
+# -------------------------------
+# Python bytecode / cache
+# -------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# -------------------------------
+# Virtual environments
+# -------------------------------
+venv/
+.env
+.venv/
+env/
+ENV/
+
+# -------------------------------
+# Build / Packaging
+# -------------------------------
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# -------------------------------
+# PyInstaller
+# -------------------------------
+*.manifest
+*.spec
+
+# -------------------------------
+# Unit test / coverage
+# -------------------------------
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+htmlcov/
+
+# -------------------------------
+# Jupyter Notebooks
+# -------------------------------
+.ipynb_checkpoints
+
+# -------------------------------
+# Type checkers
+# -------------------------------
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# -------------------------------
+# IDE / Editor settings
+# -------------------------------
+.vscode/
+.idea/
+*.swp
+
+# -------------------------------
+# Logs / Temp
+# -------------------------------
+*.log
+*.tmp
+
+# -------------------------------
+# OS-specific
+# -------------------------------
+.DS_Store
+
+# -------------------------------
+# Project-specific
+# -------------------------------
+# Firebase keys / secrets
+config/firebase-key.json
+firebase-key.json
+.env
+
+# Local dev configs
+*.local
