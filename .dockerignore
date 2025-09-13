@@ -4,4 +4,4 @@ __pycache__/
 *.pyd
 venv/
 .env
-config/firebase-service-account.json
+firebase-service-account.json
