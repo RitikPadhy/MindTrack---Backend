@@ -1,6 +1,6 @@
 fastapi
 uvicorn
 firebase-admin
-pydantic
+pydantic[email]
 python-dotenv
 firebase
