@@ -1,8 +1,0 @@
-{
-  "rewrites": [
-    {
-      "source": "/auth/(.*)",
-      "destination": "http://13.233.212.132/auth/$1"
-    }
-  ]
-}

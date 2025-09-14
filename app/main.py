@@ -4,13 +4,6 @@ from app.api import auth
 
 app = FastAPI()
 
-origins = [
-    "http://localhost:3000",  # local dev
-    "https://mind-track-web-interface.vercel.app",  # your Vercel frontend
-    "https://mind-track-web-interface-3mjtxskme-ritikpadhys-projects.vercel.app",  # preview link
-    "https://mindtracker.dedyn.io",  # your backend domain
-]
-
 # ✅ CORS setup
 app.add_middleware(
     CORSMiddleware,
