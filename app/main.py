@@ -8,8 +8,8 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",
-        "https://mind-track-web-interface.vercel.app"
+        "http://localhost:3000",                       # Dev frontend
+        "https://mind-track-web-interface.vercel.app", # Vercel frontend
     ],
     allow_credentials=True,
     allow_methods=["*"],  # allow POST, GET, OPTIONS etc.
