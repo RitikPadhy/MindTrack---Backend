@@ -1,0 +1,38 @@
+# .github/workflows/deploy.yml
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main  # deploy when main branch is updated
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout your code
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 2: Setup SSH
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.1
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      # Step 3: Deploy to EC2
+      - name: Deploy to EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no ec2-user@13.233.212.132 << 'EOF'
+          cd /path/to/your/project
+          git fetch origin
+          git reset --hard origin/main
+          
+          # Activate virtualenv and install dependencies
+          source venv/bin/activate
+          pip install -r requirements.txt
+          
+          # Restart the FastAPI service (adjust depending on how you run it)
+          sudo systemctl restart my-fastapi-app
+          EOF
