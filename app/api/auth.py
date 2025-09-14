@@ -99,8 +99,10 @@ def login(request: LoginRequest, response: Response):
         value=data["idToken"],
         httponly=True,
         secure=True,
-        samesite="none",
+        samesite="none",   # required since frontend + backend are on different domains
         max_age=int(data.get("expiresIn", 3600)),
+        path="/",
+        domain="mindtracker.dedyn.io"  # 👈 critical
     )
 
     return data
@@ -118,7 +120,8 @@ def logout(request: LogoutRequest, response: Response):
             key="access_token",
             path="/",
             samesite="none",
-            secure=True
+            secure=True,
+            domain="mindtracker.dedyn.io"
         )
 
         return {"message": f"User {request.uid} logged out (refresh tokens revoked and cookie cleared)"}

@@ -7,7 +7,10 @@ app = FastAPI()
 # ✅ CORS setup
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # frontend origin
+    allow_origins=[
+        "http://localhost:3000",                       # Dev frontend
+        "https://mind-track-web-interface.vercel.app", # Vercel frontend
+    ],
     allow_credentials=True,
     allow_methods=["*"],  # allow POST, GET, OPTIONS etc.
     allow_headers=["*"],  # allow Content-Type, Authorization, etc.
