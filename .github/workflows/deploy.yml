@@ -24,12 +24,12 @@ jobs:
       # Step 3: Deploy to EC2
       - name: Deploy to EC2
         run: |
-          ssh -o StrictHostKeyChecking=no ubuntu@13.233.212.132 << 'EOF'
-          set -e
-          cd /home/ubuntu/MindTrack---Backend
-          git fetch origin
-          git reset --hard origin/main
-          source venv/bin/activate
-          pip install -r requirements.txt
-          sudo systemctl restart fastapi
-          EOF
+          ssh -o StrictHostKeyChecking=no ubuntu@13.233.212.132 "
+            set -e
+            cd /home/ubuntu/MindTrack---Backend
+            git fetch origin
+            git reset --hard origin/main
+            source venv/bin/activate
+            pip install -r requirements.txt
+            sudo systemctl restart fastapi
+          "
