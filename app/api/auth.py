@@ -87,12 +87,12 @@ def login(request: LoginRequest):
         raise HTTPException(status_code=400, detail=r.json())
 
     data = r.json()
-    # Return token in JSON
     return {
-        "idToken": data["idToken"],
-        "refreshToken": data.get("refreshToken"),
-        "expiresIn": data.get("expiresIn"),
-        "localId": data.get("localId")
+        "access_token": data["idToken"],   # 🔑 now consistent
+        "token_type": "bearer",
+        "refresh_token": data.get("refreshToken"),
+        "expires_in": data.get("expiresIn"),
+        "uid": data.get("localId")
     }
 
 
