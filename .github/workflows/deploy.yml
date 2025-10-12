@@ -3,8 +3,8 @@ name: Deploy to EC2
 on:
   push:
     branches:
-      - main   # auto deploy when code is pushed to main
-  workflow_dispatch:   # allows manual trigger from GitHub Actions UI
+      - main
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -13,22 +13,27 @@ jobs:
     steps:
       # Step 1: Checkout repository
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # Step 2: Setup SSH agent
+      # Step 2: Setup SSH agent (for connecting to EC2)
       - name: Setup SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
-      # Step 3: Deploy to EC2
-      - name: Deploy to EC2
+      # Step 3: Copy code to EC2 using rsync over SSH
+      - name: Sync files to EC2
+        run: |
+          rsync -avz --exclude '.git' \
+          -e "ssh -o StrictHostKeyChecking=no" \
+          ./ ubuntu@13.233.212.132:/home/ubuntu/MindTrack---Backend
+
+      # Step 4: Restart FastAPI service on EC2
+      - name: Restart FastAPI service
         run: |
           ssh -o StrictHostKeyChecking=no ubuntu@13.233.212.132 '
             set -e
             cd /home/ubuntu/MindTrack---Backend
-            git fetch origin
-            git reset --hard origin/main
             source venv/bin/activate
             pip install --upgrade -r requirements.txt --no-input
             sudo systemctl restart fastapi
