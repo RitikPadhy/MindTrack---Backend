@@ -5,6 +5,9 @@ from pydantic import BaseModel, EmailStr
 from firebase_admin import auth, firestore
 from app.core.firebase import db
 from dotenv import load_dotenv
+from app.routes.routines import create_patient_routine
+from datetime import datetime, timezone
+from app.core.auth import verify_token_cookie
 
 router = APIRouter()
 
@@ -61,6 +64,11 @@ def signup(request: SignupRequest):
             "createdAt": firestore.SERVER_TIMESTAMP
         })
         doc_id = doc_ref[1].id
+        
+        # 🔹 Automatically create daily_routines document if Patient
+        if request.role.lower() == "patient":
+            created_at = datetime.now(timezone.utc)
+            create_patient_routine(request.uid, request.email, request.role, created_at)
 
         return {
             "uid": user.uid,
@@ -96,27 +104,15 @@ def login(request: LoginRequest):
     }
 
 
-# ---------- Verify Token ----------
-def verify_token(authorization: str = Header(None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing access token in Authorization header")
-    token = authorization.split(" ")[1]
-    try:
-        decoded_token = auth.verify_id_token(token)
-        return decoded_token
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-
 # ---------- Protected Route ----------
 @router.get("/me")
-def get_profile(user=Depends(verify_token)):
+def get_profile(user=Depends(verify_token_cookie)):
     return {"uid": user["uid"], "email": user.get("email")}
 
 
 # ---------- Delete User (Admin Only) ----------
 @router.delete("/delete-user/{uid}")
-def delete_user(uid: str, user=Depends(verify_token)):
+def delete_user(uid: str, user=Depends(verify_token_cookie)):
     try:
         admin_doc = db.collection("users").where("uid", "==", user["uid"]).limit(1).get()
         if not admin_doc or len(admin_doc) == 0:
