@@ -2,12 +2,11 @@ import os
 import requests
 from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel, EmailStr
-from firebase_admin import auth, firestore
+from firebase_admin import auth as firebase_auth, firestore
 from app.core.firebase import db
 from dotenv import load_dotenv
 from app.routes.routines import create_patient_routine
 from datetime import datetime, timezone
-from app.core.auth import verify_token_cookie
 
 router = APIRouter()
 
@@ -34,29 +33,43 @@ class SignupResponse(BaseModel):
     role: str
     doc_id: str
 
+# ---------- Dependency: Verify Bearer Token ----------
+def verify_bearer_token(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    token = authorization.split(" ")[1]
+    try:
+        return firebase_auth.verify_id_token(token)
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
 # ---------- Signup ----------
 @router.post("/signup", response_model=SignupResponse)
 def signup(request: SignupRequest):
     try:
+        # Limit max users
         users_ref = db.collection("users").stream()
         total_users = sum(1 for _ in users_ref)
         if total_users >= 33:
             raise HTTPException(status_code=400, detail="User limit reached (max 33 users allowed)")
 
+        # Ensure UID and email uniqueness
         try:
-            auth.get_user(request.uid)
+            firebase_auth.get_user(request.uid)
             raise HTTPException(status_code=400, detail="UID already exists")
-        except auth.UserNotFoundError:
+        except firebase_auth.UserNotFoundError:
             pass
 
         try:
-            auth.get_user_by_email(request.email)
+            firebase_auth.get_user_by_email(request.email)
             raise HTTPException(status_code=400, detail="Email already exists")
-        except auth.UserNotFoundError:
+        except firebase_auth.UserNotFoundError:
             pass
 
-        user = auth.create_user(uid=request.uid, email=request.email, password=request.password)
+        # Create Firebase user
+        user = firebase_auth.create_user(uid=request.uid, email=request.email, password=request.password)
 
+        # Add user to Firestore
         doc_ref = db.collection("users").add({
             "uid": request.uid,
             "email": request.email,
@@ -64,8 +77,8 @@ def signup(request: SignupRequest):
             "createdAt": firestore.SERVER_TIMESTAMP
         })
         doc_id = doc_ref[1].id
-        
-        # 🔹 Automatically create daily_routines document if Patient
+
+        # Automatically create daily routine if Patient
         if request.role.lower() == "patient":
             created_at = datetime.now(timezone.utc)
             create_patient_routine(request.uid, request.email, request.role, created_at)
@@ -79,7 +92,6 @@ def signup(request: SignupRequest):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
 
 # ---------- Login ----------
 @router.post("/login")
@@ -96,37 +108,38 @@ def login(request: LoginRequest):
 
     data = r.json()
     return {
-        "access_token": data["idToken"],   # 🔑 now consistent
+        "access_token": data["idToken"],
         "token_type": "bearer",
         "refresh_token": data.get("refreshToken"),
         "expires_in": data.get("expiresIn"),
         "uid": data.get("localId")
     }
 
-
 # ---------- Protected Route ----------
 @router.get("/me")
-def get_profile(user=Depends(verify_token_cookie)):
+def get_profile(user=Depends(verify_bearer_token)):
     return {"uid": user["uid"], "email": user.get("email")}
-
 
 # ---------- Delete User (Admin Only) ----------
 @router.delete("/delete-user/{uid}")
-def delete_user(uid: str, user=Depends(verify_token_cookie)):
+def delete_user(uid: str, admin_user=Depends(verify_bearer_token)):
     try:
-        admin_doc = db.collection("users").where("uid", "==", user["uid"]).limit(1).get()
+        # Verify admin
+        admin_doc = db.collection("users").where("uid", "==", admin_user["uid"]).limit(1).get()
         if not admin_doc or len(admin_doc) == 0:
-            raise HTTPException(status_code=403, detail="User record not found")
+            raise HTTPException(status_code=403, detail="Admin user record not found")
 
         admin_data = admin_doc[0].to_dict()
         if admin_data.get("role") != "Admin":
             raise HTTPException(status_code=403, detail="Only Admins can delete users")
 
+        # Delete Firebase user
         try:
-            auth.delete_user(uid)
-        except auth.UserNotFoundError:
+            firebase_auth.delete_user(uid)
+        except firebase_auth.UserNotFoundError:
             raise HTTPException(status_code=404, detail="User not found in Firebase Auth")
 
+        # Delete Firestore document(s)
         target_docs = db.collection("users").where("uid", "==", uid).stream()
         deleted = False
         for doc in target_docs:
