@@ -4,6 +4,7 @@ from app.api import auth
 from app.routes import routines  # Import the routines router
 from app.routes import feedback  
 from app.routes import track_progress 
+from app.routes import reading
 
 app = FastAPI()
 
@@ -20,6 +21,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(routines.router, prefix="/routines", tags=["routines"])
 app.include_router(feedback.router, prefix="/weekly-feedback", tags=["feedback"])
+app.include_router(reading.router, prefix="/reading", tags=["reading"])
 app.include_router(track_progress.router, prefix="/track_progress", tags=["track_progress"])
 
 # ---------- Root endpoint ----------
