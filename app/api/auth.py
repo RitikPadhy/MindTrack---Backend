@@ -19,6 +19,7 @@ class SignupRequest(BaseModel):
     email: EmailStr
     password: str
     role: str
+    gender: str
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -74,6 +75,7 @@ def signup(request: SignupRequest):
             "uid": request.uid,
             "email": request.email,
             "role": request.role,
+            "gender": request.gender,  # 👈 Added
             "createdAt": firestore.SERVER_TIMESTAMP
         })
         doc_id = doc_ref[1].id

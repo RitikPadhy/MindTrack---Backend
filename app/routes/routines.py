@@ -36,7 +36,7 @@ def create_patient_routine(uid: str, email: str, role: str, created_at: datetime
     routine_data = generate_four_week_routine(created_at)
     
     # Tasks array outside routines, 17 empty elements (6am-11pm)
-    tasks_array = [""] * 17
+    tasks_array = [{"tasks": []} for _ in range(17)]
 
     routine_doc = {
         "uid": uid,
@@ -60,9 +60,12 @@ class HourSlotsUpdate(BaseModel):
     date: str           # YYYY-MM-DD
     hour: str           # HH:MM
     filled: bool        # True or False for all 4 slots
+    
+class HourTask(BaseModel):
+    tasks: list[str]
 
 class UpdateTasksArray(BaseModel):
-    tasks: list[str]    # List of tasks, length must be 17 (6am-11pm)
+    tasks: list[HourTask]    # List of tasks, length must be 17 (6am-11pm)
 
 # ----------------- API Endpoints -----------------
 @router.patch("/update-slot")
@@ -124,7 +127,13 @@ def update_tasks_array(request: UpdateTasksArray, user=Depends(verify_token_cook
     if len(request.tasks) != 17:
         raise HTTPException(status_code=400, detail="Tasks array must have 17 elements (6am to 11pm)")
 
-    # Update tasks array at root level
-    doc_ref.update({"tasks": request.tasks})
+    # Validate each hour’s task list
+    for idx, hour_data in enumerate(request.tasks):
+        if len(hour_data.tasks) > 2:
+            raise HTTPException(status_code=400, detail=f"Hour index {idx} can only have up to 2 tasks")
 
-    return {"message": "Tasks array updated successfully", "tasks": request.tasks}
+    # ✅ Convert to Firestore-safe format (list of dicts)
+    firestore_safe_tasks = [hour_data.dict() for hour_data in request.tasks]
+    doc_ref.update({"tasks": firestore_safe_tasks})
+
+    return {"message": "Tasks array updated successfully", "tasks": firestore_safe_tasks}
