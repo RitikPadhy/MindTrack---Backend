@@ -2,11 +2,10 @@ import os
 import requests
 from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel, EmailStr
-from firebase_admin import auth as firebase_auth, firestore
+from firebase_admin import auth as firebase_auth
 from app.core.firebase import db
 from dotenv import load_dotenv
-from app.routes.routines import create_patient_routine
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
 
 router = APIRouter()
 
@@ -14,27 +13,23 @@ load_dotenv()
 FIREBASE_API_KEY = os.getenv("FIREBASE_API_KEY")
 
 # ---------- Pydantic Models ----------
-class SignupRequest(BaseModel):
-    uid: str
-    email: EmailStr
-    password: str
-    role: str
-    gender: str
-
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
+class ChangePasswordRequest(BaseModel):
+    email: EmailStr
+    old_password: str
+    new_password: str
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
 class LogoutRequest(BaseModel):
     uid: str
 
-class SignupResponse(BaseModel):
-    uid: str
-    email: EmailStr
-    role: str
-    doc_id: str
 
-# ---------- Dependency: Verify Bearer Token ----------
+# ---------- Helper Functions ----------
 def verify_bearer_token(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
@@ -44,60 +39,15 @@ def verify_bearer_token(authorization: str = Header(None)):
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
-# ---------- Signup ----------
-@router.post("/signup", response_model=SignupResponse)
-def signup(request: SignupRequest):
-    try:
-        # Limit max users
-        users_ref = db.collection("users").stream()
-        total_users = sum(1 for _ in users_ref)
-        if total_users >= 33:
-            raise HTTPException(status_code=400, detail="User limit reached (max 33 users allowed)")
-
-        # Ensure UID and email uniqueness
-        try:
-            firebase_auth.get_user(request.uid)
-            raise HTTPException(status_code=400, detail="UID already exists")
-        except firebase_auth.UserNotFoundError:
-            pass
-
-        try:
-            firebase_auth.get_user_by_email(request.email)
-            raise HTTPException(status_code=400, detail="Email already exists")
-        except firebase_auth.UserNotFoundError:
-            pass
-
-        # Create Firebase user
-        user = firebase_auth.create_user(uid=request.uid, email=request.email, password=request.password)
-
-        # Add user to Firestore
-        doc_ref = db.collection("users").add({
-            "uid": request.uid,
-            "email": request.email,
-            "role": request.role,
-            "gender": request.gender,  # 👈 Added
-            "createdAt": firestore.SERVER_TIMESTAMP
-        })
-        doc_id = doc_ref[1].id
-
-        # Automatically create daily routine if Patient
-        if request.role.lower() == "patient":
-            created_at = datetime.now(timezone.utc)
-            create_patient_routine(request.uid, request.email, request.role, created_at)
-
-        return {
-            "uid": user.uid,
-            "email": request.email,
-            "role": request.role,
-            "doc_id": doc_id
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 # ---------- Login ----------
 @router.post("/login")
 def login(request: LoginRequest):
+    """
+    Logs in a user and returns ID token + Refresh token.
+    The frontend must store both tokens locally.
+    If ID token expires, frontend can use refresh token to get a new one automatically.
+    """
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}"
     payload = {
         "email": request.email,
@@ -110,17 +60,89 @@ def login(request: LoginRequest):
 
     data = r.json()
     return {
-        "access_token": data["idToken"],
+        "access_token": data["idToken"],        # short-lived token (1 hour)
+        "refresh_token": data["refreshToken"],  # long-lived token (use to refresh)
         "token_type": "bearer",
-        "refresh_token": data.get("refreshToken"),
-        "expires_in": data.get("expiresIn"),
-        "uid": data.get("localId")
+        "expires_in": data["expiresIn"],
+        "uid": data["localId"],
     }
 
-# ---------- Protected Route ----------
+
+# ---------- Refresh Token ----------
+@router.post("/refresh-token")
+def refresh_token(request: RefreshTokenRequest):
+    """
+    Use refresh token to get a new access token.
+    This allows auto-login without asking for credentials again.
+    """
+    url = f"https://securetoken.googleapis.com/v1/token?key={FIREBASE_API_KEY}"
+    payload = {
+        "grant_type": "refresh_token",
+        "refresh_token": request.refresh_token
+    }
+    r = requests.post(url, data=payload)
+    if r.status_code != 200:
+        raise HTTPException(status_code=400, detail=r.json())
+
+    data = r.json()
+    return {
+        "access_token": data["id_token"],
+        "refresh_token": data["refresh_token"],
+        "token_type": "bearer",
+        "expires_in": data["expires_in"],
+        "uid": data["user_id"]
+    }
+
+
+# ---------- Change Password ----------
+@router.post("/change-password")
+def change_password(request: ChangePasswordRequest):
+    """
+    Verifies old password, then updates password.
+    """
+    try:
+        signin_url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}"
+        signin_payload = {
+            "email": request.email,
+            "password": request.old_password,
+            "returnSecureToken": True,
+        }
+        signin_response = requests.post(signin_url, json=signin_payload)
+
+        if signin_response.status_code != 200:
+            raise HTTPException(status_code=401, detail="Invalid old password")
+
+        signin_data = signin_response.json()
+        uid = signin_data.get("localId")
+
+        firebase_auth.update_user(uid, password=request.new_password)
+        return {"message": "Password changed successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error changing password: {str(e)}")
+
+
+# ---------- Get Profile ----------
 @router.get("/me")
 def get_profile(user=Depends(verify_bearer_token)):
     return {"uid": user["uid"], "email": user.get("email")}
+
+
+# ---------- Logout ----------
+@router.post("/logout")
+def logout(request: LogoutRequest):
+    """
+    Just clears the refresh token on the client side.
+    Server-side logout isn't needed for Firebase, unless you want to revoke tokens.
+    """
+    try:
+        firebase_auth.revoke_refresh_tokens(request.uid)
+        return {"message": "User logged out successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error logging out: {str(e)}")
+
 
 # ---------- Delete User (Admin Only) ----------
 @router.delete("/delete-user/{uid}")
