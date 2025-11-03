@@ -127,8 +127,19 @@ def change_password(request: ChangePasswordRequest):
 # ---------- Get Profile ----------
 @router.get("/me")
 def get_profile(user=Depends(verify_bearer_token)):
-    return {"uid": user["uid"], "email": user.get("email")}
+    # Fetch additional user details from Firestore
+    user_doc = db.collection("users").where("uid", "==", user["uid"]).limit(1).get()
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User record not found")
 
+    user_data = user_doc[0].to_dict()
+
+    return {
+        "uid": user["uid"],
+        "email": user.get("email"),
+        "role": user_data.get("role"),
+        "createdAt": user_data.get("createdAt"),
+    }
 
 # ---------- Logout ----------
 @router.post("/logout")
