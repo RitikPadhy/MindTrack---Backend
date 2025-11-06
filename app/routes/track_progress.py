@@ -5,104 +5,99 @@ from app.core.auth import verify_bearer_token
 
 router = APIRouter()
 
-# ----------------- Helper Functions -----------------
-def get_dates_for_period(period: str):
-    """
-    Returns list of date strings for: day | week | month
-    """
+# ----------------- Helper: Get Dates -----------------
+def get_dates(period: str):
     today = datetime.now().date()
 
     if period == "day":
         return [today.isoformat()]
 
     elif period == "week":
-        start_of_week = today - timedelta(days=today.weekday())  # Monday
-        return [(start_of_week + timedelta(days=i)).isoformat() for i in range(7)]
+        start = today - timedelta(days=today.weekday())
+        return [(start + timedelta(days=i)).isoformat() for i in range(7)]
 
     elif period == "month":
-        start_of_month = today.replace(day=1)
-        next_month = today.replace(month=today.month % 12 + 1, day=1)
-        num_days = (next_month - timedelta(days=1)).day
-        return [(start_of_month + timedelta(days=i)).isoformat() for i in range(num_days)]
+        start = today.replace(day=1)
+        next_month = start.replace(month=start.month % 12 + 1, day=1)
+        days_in_month = (next_month - start).days
+        return [(start + timedelta(days=i)).isoformat() for i in range(days_in_month)]
 
-    else:
-        raise ValueError("Invalid period")
+    raise ValueError("Invalid period. Use day, week, or month.")
 
 
-def calculate_task_percentages(routines_doc, dates):
-    """
-    Calculate top 5 tasks based on appearance vs completion across given dates.
-    Only the FIRST task in each hour is counted.
-    """
-    task_totals = {}   # task_name → number of slots existing
-    task_filled = {}   # task_name → number of slots completed
+# ----------------- Core Calculation -----------------
+def compute_task_progress(doc_data, dates):
+    task_list = doc_data.get("tasks", [])
+    routines = doc_data.get("routines", {})
 
-    routines = routines_doc.get("routines", {})
+    task_stats = {}  # {task_name: {"filled": x, "total": y}}
 
-    for date in dates:
-        day_routine = routines.get(date, {})
-        if not day_routine:
+    for day in dates:
+        day_data = routines.get(day, {})
+        if not day_data:
             continue
 
-        for hour, hour_data in day_routine.items():
-            if hour == "tasks":
+        # Iterate by hour in the day
+        for idx, (hour, hour_data) in enumerate(sorted(day_data.items())):
+            if idx >= len(task_list):
+                continue  # safety
+
+            # Get first task name for this hour
+            tasks_for_hour = task_list[idx].get("tasks", [])
+            if not tasks_for_hour:
                 continue
+
+            task_name = tasks_for_hour[0]
+
+            # Initialize aggregate bucket
+            if task_name not in task_stats:
+                task_stats[task_name] = {"filled": 0, "total": 0}
 
             slots = hour_data.get("slots", {})
+            for slot in slots.values():
+                task_stats[task_name]["total"] += 1
+                if slot.get("filled"):
+                    task_stats[task_name]["filled"] += 1
 
-            # If there are two tasks, only consider the FIRST one
-            sorted_slots = sorted(slots.items(), key=lambda x: x[0])
-            if not sorted_slots:
-                continue
+    # Convert to %
+    results = []
+    for task, stats in task_stats.items():
+        if stats["total"] == 0:
+            percentage = 0.0
+        else:
+            percentage = round((stats["filled"] / stats["total"]) * 100, 2)
 
-            first_slot = sorted_slots[0][1]
-            task_name = first_slot.get("task_name")
-            filled = first_slot.get("filled", False)
-
-            if not task_name:
-                continue
-
-            task_totals[task_name] = task_totals.get(task_name, 0) + 1
-            if filled:
-                task_filled[task_name] = task_filled.get(task_name, 0) + 1
-
-    task_percentages = []
-    for task, total in task_totals.items():
-        completed = task_filled.get(task, 0)
-        percentage = (completed / total) * 100 if total > 0 else 0
-        task_percentages.append({
-            "task_name": task,
-            "percentage_done": round(percentage, 2),
+        results.append({
+            "task": task,
+            "percentage_done": percentage,
+            "filled": stats["filled"],
+            "total_slots": stats["total"]
         })
 
-    task_percentages.sort(key=lambda x: x["percentage_done"], reverse=True)
+    # return top 5 highest %
+    results.sort(key=lambda x: x["percentage_done"], reverse=True)
+    return results[:5]
 
-    return task_percentages[:5]
 
-
-# ----------------- API Endpoint -----------------
+# ----------------- API -----------------
 @router.get("/progress/{period}")
-def track_progress(period: str, user=Depends(verify_bearer_token)):
-    """
-    Returns the TOP 5 tasks with highest completion percentage
-    for the selected period: day | week | month
-    """
+def get_top_tasks(period: str, user=Depends(verify_bearer_token)):
     uid = user["uid"]
+
     doc_ref = db.collection("daily_routines").document(uid)
     doc = doc_ref.get()
-
     if not doc.exists:
-        raise HTTPException(status_code=404, detail="Routine not found for this user")
+        raise HTTPException(status_code=404, detail="Routine not found")
 
     try:
-        dates = get_dates_for_period(period)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid period. Use: day | week | month")
+        dates = get_dates(period)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-    top_tasks = calculate_task_percentages(doc.to_dict(), dates)
+    results = compute_task_progress(doc.to_dict(), dates)
 
     return {
         "uid": uid,
         "period": period,
-        "top_tasks": top_tasks
+        "top_tasks": results
     }
