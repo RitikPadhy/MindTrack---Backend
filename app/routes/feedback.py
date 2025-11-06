@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from app.core.firebase import db
-from app.core.auth import verify_token_cookie  # centralized auth dependency
+from app.core.auth import verify_bearer_token  # centralized auth dependency
 
 router = APIRouter()
 
@@ -31,7 +31,7 @@ def get_week_number(start_date: datetime, current_date: datetime) -> int:
 
 # ----------------- API Endpoints -----------------
 @router.patch("/update-week")
-def update_week(feedback: WeeklyFeedbackUpdate, user=Depends(verify_token_cookie)):
+def update_week(feedback: WeeklyFeedbackUpdate, user=Depends(verify_bearer_token)):
     uid = user["uid"]
     if user.get("role") != "Patient":
         raise HTTPException(status_code=403, detail="Access restricted to patients only")
@@ -69,7 +69,7 @@ def update_week(feedback: WeeklyFeedbackUpdate, user=Depends(verify_token_cookie
     return {"message": f"Week {feedback.week_number} feedback updated successfully"}
 
 @router.get("/get-current-week")
-def get_current_week(user=Depends(verify_token_cookie)):
+def get_current_week(user=Depends(verify_bearer_token)):
     """
     Returns the feedback for the current week (1-4) based on the start date of feedback.
     """

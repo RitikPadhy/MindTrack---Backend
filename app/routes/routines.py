@@ -3,7 +3,7 @@ from firebase_admin import firestore
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from app.core.firebase import db
-from app.core.auth import verify_token_cookie  # centralized auth dependency
+from app.core.auth import verify_bearer_token  # centralized auth dependency
 
 router = APIRouter()
 
@@ -69,7 +69,7 @@ class UpdateTasksArray(BaseModel):
 
 # ----------------- API Endpoints -----------------
 @router.get("/get-day-routine")
-def get_day_routine(date: str, user=Depends(verify_token_cookie)):
+def get_day_routine(date: str, user=Depends(verify_bearer_token)):
     uid = user["uid"]
     doc_ref = db.collection("daily_routines").document(uid)
     doc = doc_ref.get()
@@ -85,7 +85,7 @@ def get_day_routine(date: str, user=Depends(verify_token_cookie)):
     return {"uid": uid, "date": date, "routine": day_routine, "tasks": tasks_array}
 
 @router.patch("/update-tasks-array")
-def update_tasks_array(request: UpdateTasksArray, user=Depends(verify_token_cookie)):
+def update_tasks_array(request: UpdateTasksArray, user=Depends(verify_bearer_token)):
     uid = user["uid"]
     doc_ref = db.collection("daily_routines").document(uid)
     doc = doc_ref.get()
