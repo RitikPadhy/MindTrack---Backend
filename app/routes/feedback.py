@@ -57,7 +57,7 @@ def update_week(feedback: WeeklyFeedbackUpdate, user=Depends(verify_bearer_token
         raise HTTPException(status_code=400, detail="Week number must be between 1 and 4")
 
     # Update all 5 metrics at once
-    field_path = f"weeks.{feedback.week_number}"
+    field_path = f"weeks.{str(feedback.week_number)}"
     doc_ref.update({field_path: {
         "energy_levels": float(feedback.energy_levels),
         "satisfaction": float(feedback.satisfaction),
