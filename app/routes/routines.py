@@ -68,37 +68,6 @@ class UpdateTasksArray(BaseModel):
     tasks: list[HourTask]    # List of tasks, length must be 17 (6am-11pm)
 
 # ----------------- API Endpoints -----------------
-@router.patch("/update-slot")
-def update_single_slot(request: SingleSlotUpdate, user=Depends(verify_token_cookie)):
-    uid = user["uid"]
-    doc_ref = db.collection("daily_routines").document(uid)
-    doc = doc_ref.get()
-    if not doc.exists:
-        raise HTTPException(status_code=404, detail="Routine not found")
-
-    field_path = f"routines.{request.date}.{request.hour}.slots.{request.slot}.filled"
-    doc_ref.update({field_path: request.filled})
-    return {"message": f"Slot {request.slot} on {request.date} updated to {request.filled}"}
-
-@router.patch("/update-hour")
-def update_hour_slots(request: HourSlotsUpdate, user=Depends(verify_token_cookie)):
-    uid = user["uid"]
-    doc_ref = db.collection("daily_routines").document(uid)
-    doc = doc_ref.get()
-    if not doc.exists:
-        raise HTTPException(status_code=404, detail="Routine not found")
-
-    hour_slots = doc.to_dict()["routines"].get(request.date, {}).get(request.hour, {}).get("slots", {})
-    if not hour_slots:
-        raise HTTPException(status_code=404, detail="Hour not found")
-
-    update_data = {}
-    for slot in hour_slots.keys():
-        update_data[f"routines.{request.date}.{request.hour}.slots.{slot}.filled"] = request.filled
-
-    doc_ref.update(update_data)
-    return {"message": f"All slots in {request.hour} on {request.date} updated to {request.filled}"}
-
 @router.get("/get-day-routine")
 def get_day_routine(date: str, user=Depends(verify_token_cookie)):
     uid = user["uid"]

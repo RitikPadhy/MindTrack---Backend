@@ -127,18 +127,28 @@ def change_password(request: ChangePasswordRequest):
 # ---------- Get Profile ----------
 @router.get("/me")
 def get_profile(user=Depends(verify_bearer_token)):
-    # Fetch additional user details from Firestore
-    user_doc = db.collection("users").where("uid", "==", user["uid"]).limit(1).get()
+    uid = user["uid"]
+
+    # Fetch user profile data
+    user_doc = db.collection("users").where("uid", "==", uid).limit(1).get()
     if not user_doc:
         raise HTTPException(status_code=404, detail="User record not found")
-
     user_data = user_doc[0].to_dict()
 
+    # Fetch tasks data from daily_routines
+    routine_doc = db.collection("daily_routines").document(uid).get()
+    if routine_doc.exists:
+        tasks_array = routine_doc.to_dict().get("tasks", [])
+    else:
+        tasks_array = []  # No routine created yet
+
     return {
-        "uid": user["uid"],
+        "uid": uid,
         "email": user.get("email"),
         "role": user_data.get("role"),
         "createdAt": user_data.get("createdAt"),
+        "gender": user_data.get("gender"),
+        "tasks": tasks_array   
     }
 
 # ---------- Logout ----------
