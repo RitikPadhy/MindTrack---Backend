@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Depends
 from app.core.firebase import db
-from app.core.auth import verify_token_cookie  # centralized auth dependency
+from app.core.auth import verify_bearer_token  # centralized auth dependency
 
 router = APIRouter()
 
@@ -61,7 +61,7 @@ def calculate_task_completion(routines_doc, dates):
 
 # ----------------- API Endpoints -----------------
 @router.get("/progress/{period}")
-def track_progress(period: str, user=Depends(verify_token_cookie)):
+def track_progress(period: str, user=Depends(verify_bearer_token)):
     """
     period: day | week | month
     Returns percentage of tasks done for the period.
