@@ -33,7 +33,15 @@ def get_week_number(start_date: datetime, current_date: datetime) -> int:
 @router.patch("/update-week")
 def update_week(feedback: WeeklyFeedbackUpdate, user=Depends(verify_bearer_token)):
     uid = user["uid"]
-    if user.get("role") != "Patient":
+    # ✅ Fetch Firestore user record:
+    user_doc = db.collection("users").document(uid).get()
+    if not user_doc.exists:
+        raise HTTPException(status_code=404, detail="User record not found")
+
+    user_info = user_doc.to_dict()
+
+    # ✅ Check role from Firestore, not from token
+    if user_info.get("role") != "Patient":
         raise HTTPException(status_code=403, detail="Access restricted to patients only")
     
     doc_ref = db.collection("weekly_feedback").document(uid)
