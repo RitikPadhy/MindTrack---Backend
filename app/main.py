@@ -5,6 +5,7 @@ from app.routes import routines  # Import the routines router
 from app.routes import feedback  
 from app.routes import track_progress 
 from app.routes import reading
+from app.routes import achievements
 
 app = FastAPI()
 
@@ -23,6 +24,7 @@ app.include_router(routines.router, prefix="/routines", tags=["routines"])
 app.include_router(feedback.router, prefix="/weekly-feedback", tags=["feedback"])
 app.include_router(reading.router, prefix="/reading", tags=["reading"])
 app.include_router(track_progress.router, prefix="/track_progress", tags=["track_progress"])
+app.include_router(achievements.router, prefix="/achievements", tags=["achievements"])
 
 # ---------- Root endpoint ----------
 @app.get("/")
