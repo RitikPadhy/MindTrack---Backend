@@ -15,6 +15,7 @@ class WeeklyFeedbackUpdate(BaseModel):
     happiness: float = Field(..., ge=0.0, le=10.0)
     proud_of_achievements: float = Field(..., ge=0.0, le=10.0)
     how_busy: float = Field(..., ge=0.0, le=10.0)
+    feedback_text: str | None = None
 
 # ----------------- Helper Functions -----------------
 def get_week_number(start_date: datetime, current_date: datetime) -> int:
@@ -71,7 +72,8 @@ def update_week(feedback: WeeklyFeedbackUpdate, user=Depends(verify_bearer_token
         "satisfaction": float(feedback.satisfaction),
         "happiness": float(feedback.happiness),
         "proud_of_achievements": float(feedback.proud_of_achievements),
-        "how_busy": float(feedback.how_busy)
+        "how_busy": float(feedback.how_busy),
+        "feedback_text": feedback.feedback_text or ""
     }})
 
     return {"message": f"Week {feedback.week_number} feedback updated successfully"}
