@@ -14,6 +14,11 @@ class LoginRequest(BaseModel):
 
 class LogoutRequest(BaseModel):
     uid: str
+    
+class ChangePasswordRequest(BaseModel):
+    uid: str
+    old_password: str
+    new_password: str
 
 
 # ---------- Helper: Verify Bearer Token ----------
@@ -60,6 +65,36 @@ def login(request: LoginRequest):
         "uid": request.uid,
         "role": user_data.get("role"),
     }
+
+# ---------- Change Password ----------    
+@router.post("/change-password")
+def change_password(request: ChangePasswordRequest, user=Depends(verify_bearer_token)):
+    uid = request.uid
+
+    # Ensure the logged-in user is the same as the UID being updated
+    if user["uid"] != uid:
+        raise HTTPException(status_code=403, detail="Cannot change another user's password")
+
+    user_doc = db.collection("users").document(uid).get()
+    if not user_doc.exists:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user_data = user_doc.to_dict()
+    password_hash = user_data.get("passwordHash")
+    if not password_hash:
+        raise HTTPException(status_code=400, detail="User has no password set")
+
+    # Verify old password
+    if not bcrypt.checkpw(request.old_password.encode("utf-8"), password_hash.encode("utf-8")):
+        raise HTTPException(status_code=401, detail="Old password is incorrect")
+
+    # Hash new password
+    new_password_hash = bcrypt.hashpw(request.new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+    # Update Firestore
+    db.collection("users").document(uid).update({"passwordHash": new_password_hash})
+
+    return {"message": "Password changed successfully"}
 
 
 # ---------- Get Profile ----------
