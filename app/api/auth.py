@@ -15,9 +15,9 @@ class LoginRequest(BaseModel):
 class LogoutRequest(BaseModel):
     uid: str
     
-class ChangePasswordRequest(BaseModel):
+class SetNewPasswordRequest(BaseModel):
     uid: str
-    old_password: str
+    password: str
     new_password: str
 
 
@@ -67,14 +67,15 @@ def login(request: LoginRequest):
     }
 
 # ---------- Change Password ----------    
-@router.post("/change-password")
-def change_password(request: ChangePasswordRequest, user=Depends(verify_bearer_token)):
+@router.post("/set-new-password")
+def set_new_password(request: SetNewPasswordRequest):
+    """
+    Allows user to set a new password by providing UID + current password.
+    Does NOT require Bearer token.
+    """
     uid = request.uid
 
-    # Ensure the logged-in user is the same as the UID being updated
-    if user["uid"] != uid:
-        raise HTTPException(status_code=403, detail="Cannot change another user's password")
-
+    # 1️⃣ Fetch user from Firestore
     user_doc = db.collection("users").document(uid).get()
     if not user_doc.exists:
         raise HTTPException(status_code=404, detail="User not found")
@@ -84,18 +85,17 @@ def change_password(request: ChangePasswordRequest, user=Depends(verify_bearer_t
     if not password_hash:
         raise HTTPException(status_code=400, detail="User has no password set")
 
-    # Verify old password
-    if not bcrypt.checkpw(request.old_password.encode("utf-8"), password_hash.encode("utf-8")):
-        raise HTTPException(status_code=401, detail="Old password is incorrect")
+    # 2️⃣ Verify provided password
+    if not bcrypt.checkpw(request.password.encode("utf-8"), password_hash.encode("utf-8")):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # Hash new password
+    # 3️⃣ Hash new password
     new_password_hash = bcrypt.hashpw(request.new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-    # Update Firestore
+    # 4️⃣ Update Firestore
     db.collection("users").document(uid).update({"passwordHash": new_password_hash})
 
     return {"message": "Password changed successfully"}
-
 
 # ---------- Get Profile ----------
 
