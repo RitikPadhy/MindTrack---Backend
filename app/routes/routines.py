@@ -129,15 +129,7 @@ def get_day_routine(date: str, user=Depends(verify_bearer_token)):
     if routine is None:
         raise HTTPException(status_code=404, detail=f"No routine found for {date}")
 
-    # Ensure every hour has 4 slots (filled = True/False)
-    transformed_routine = {}
-    for hour, tasks in routine.items():
-        transformed_routine[hour] = {
-            "tasks": tasks,  # Keep original tasks per hour if you have them
-            "slots": {f"{hour[:2]}:{minute}": {"filled": False} for minute in ["00", "15", "30", "45"]}
-        }
-
-    return {"uid": uid, "date": date, "routine": transformed_routine, "tasks": data.get("tasks", [])}
+    return {"uid": uid, "date": date, "routine": routine, "tasks": data.get("tasks", [])}
 
 
 @router.patch("/update-tasks-array")
