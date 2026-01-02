@@ -59,9 +59,17 @@ def get_achievements(user=Depends(verify_bearer_token)):
 
         # Categories Used
         for hour_index, hour_tasks in enumerate(tasks_array):
-            tasks = hour_tasks.get("tasks", [])
-            if tasks:
-                category_set.add(tasks[0])
+            # Handle both formats: {"tasks": [...]} (old) and {"items": [...]} (new from web interface)
+            if "items" in hour_tasks:
+                # New format: items is a list of objects with "title" and "category"
+                items = hour_tasks.get("items", [])
+                for item in items:
+                    if isinstance(item, dict) and "category" in item:
+                        category_set.add(item["category"])
+            elif "tasks" in hour_tasks:
+                # Old format: tasks is a list of strings (legacy, may not have categories)
+                # Skip categories for old format as it doesn't store category info
+                pass
 
     # Convert slots → hours (each slot = 15 min)
     total_hours = (total_filled_slots * 15) / 60
