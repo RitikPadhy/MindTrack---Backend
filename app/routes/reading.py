@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from firebase_admin import firestore
 from app.core.firebase import db  # your initialized Firestore client
-from app.core.auth import get_current_user
+from app.core.auth import verify_bearer_token
 
 router = APIRouter()
 
@@ -54,7 +54,7 @@ def get_all_reading_material():
         raise HTTPException(status_code=400, detail=str(e))
     
 @router.post("/reading-material/{section_id}/view")
-def increment_section_view(section_id: int, user=Depends(get_current_user)):
+def increment_section_view(section_id: int, user=Depends(verify_bearer_token)):
     try:
         uid = user["uid"]  # adapt based on your auth payload
 
