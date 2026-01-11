@@ -1,9 +1,10 @@
 # reading.py
 import os
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from firebase_admin import firestore
 from app.core.firebase import db  # your initialized Firestore client
+from app.core.auth import get_current_user
 
 router = APIRouter()
 
@@ -49,5 +50,31 @@ def get_all_reading_material():
             item["section_id"] = int(doc.id)
             data.append(item)
         return data
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+@router.post("/reading-material/{section_id}/view")
+def increment_section_view(section_id: int, user=Depends(get_current_user)):
+    try:
+        uid = user["uid"]  # adapt based on your auth payload
+
+        doc_ref = (
+            db.collection("users")
+            .document(uid)
+            .collection("reading_stats")
+            .document(str(section_id))
+        )
+
+        doc = doc_ref.get()
+        if doc.exists:
+            doc_ref.update({
+                "count": firestore.Increment(1)
+            })
+        else:
+            doc_ref.set({
+                "count": 1
+            })
+
+        return {"message": "View count updated"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
