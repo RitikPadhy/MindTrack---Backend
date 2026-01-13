@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from firebase_admin import firestore
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Dict, List
+from typing import Dict, List, Any
 from app.core.firebase import db
 from app.core.auth import verify_bearer_token
 
@@ -33,7 +33,7 @@ class UpdateTasksArray(BaseModel):
 
 class GranularCompletion(BaseModel):
     date: str
-    hour_slots_status: Dict[str, Dict[str, Dict[int, bool]]]
+    hour_slots_status: Dict[str, Dict[str, Dict[str, Any]]]
 
 
 @router.get("/get-day-routine")
