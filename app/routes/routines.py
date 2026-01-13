@@ -150,7 +150,7 @@ def update_tasks_array(request: UpdateTasksArray, user=Depends(verify_bearer_tok
     doc_ref.update({"tasks": [task.dict() for task in request.tasks]})
     return {"message": "Tasks array updated successfully"}
 
-
+## Update day
 @router.patch("/update-day")
 def update_day_completion_granular(request: GranularCompletion, user=Depends(verify_bearer_token)):
     uid = user["uid"]
