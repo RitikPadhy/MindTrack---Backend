@@ -43,11 +43,21 @@ def compute_task_progress(doc_data, dates):
                 continue  # safety
 
             # Get first task name for this hour
-            tasks_for_hour = task_list[idx].get("tasks", [])
-            if not tasks_for_hour:
+            # Handle both formats: {"tasks": [...]} (old) and {"items": [...]} (new from web interface)
+            task_name = None
+            if "items" in task_list[idx]:
+                # New format: items is a list of objects with "title" and "category"
+                items = task_list[idx].get("items", [])
+                if items and isinstance(items[0], dict) and "title" in items[0]:
+                    task_name = items[0]["title"]
+            elif "tasks" in task_list[idx]:
+                # Old format: tasks is a list of strings
+                tasks_for_hour = task_list[idx].get("tasks", [])
+                if tasks_for_hour:
+                    task_name = tasks_for_hour[0] if isinstance(tasks_for_hour[0], str) else str(tasks_for_hour[0])
+            
+            if not task_name:
                 continue
-
-            task_name = tasks_for_hour[0]
 
             # Initialize aggregate bucket
             if task_name not in task_stats:
