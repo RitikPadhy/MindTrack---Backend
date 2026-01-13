@@ -40,6 +40,7 @@ class GranularCompletion(BaseModel):
 def get_day_routine(date: str, user=Depends(verify_bearer_token)):
     uid = user["uid"]
     doc = db.collection("daily_routines").document(uid).get()
+    tasks = doc.to_dict().get("tasks", []) if doc.exists else []
 
     if not doc.exists:
         raise HTTPException(status_code=404, detail="Routine not found")
@@ -75,7 +76,7 @@ def get_day_routine(date: str, user=Depends(verify_bearer_token)):
         "uid": uid,
         "date": date,
         "routine": normalized,
-        "tasks": data.get("tasks", []),
+        "tasks": tasks,
     }
 
 @router.patch("/update-day")
