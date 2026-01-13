@@ -33,7 +33,7 @@ class UpdateTasksArray(BaseModel):
 
 class GranularCompletion(BaseModel):
     date: str
-    hour_slots_status: Dict[str, Dict[str, bool]]
+    hour_slots_status: Dict[str, Dict[str, Dict[int, bool]]]
 
 
 @router.get("/get-day-routine")
@@ -50,13 +50,10 @@ def get_day_routine(date: str, user=Depends(verify_bearer_token)):
     routines = data.get("routines", {})
     day_routine = routines.get(date, {})
 
-    # Build a normalized 17-hour structure (06:00 → 22:00)
+    # ---------------- Normalize routine slots (06:00 → 23:00) ----------------
     normalized = {}
-    base_hour = 6
-
-    for i in range(17):
-        hour = f"{base_hour + i:02d}:00"
-
+    for i in range(18):  # 06 → 23 inclusive
+        hour = f"{6 + i:02d}:00"
         existing = day_routine.get(hour, {})
         slots = existing.get("slots", {})
 
@@ -87,11 +84,12 @@ def update_day_completion_granular(request: GranularCompletion, user=Depends(ver
     if not doc_ref.get().exists:
         raise HTTPException(status_code=404, detail="Routine not found")
 
-    update_data = {
-        f"routines.{request.date}.{hour}.slots.{slot}.filled": filled
-        for hour, slot_map in request.hour_slots_status.items()
-        for slot, filled in slot_map.items()
-    }
+    update_data = {}
+
+    for hour, slots_map in request.hour_slots_status.items():
+        for slot, tasks_map in slots_map.items():
+            for task_index, filled in tasks_map.items():
+                update_data[f"routines.{request.date}.{hour}.slots.{slot}.tasks.{task_index}.filled"] = filled
 
     if update_data:
         doc_ref.update(update_data)
