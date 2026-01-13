@@ -31,26 +31,6 @@ def generate_four_week_routine(created_at: datetime):
 
     return routine_data
 
-
-# ----------------- Create Patient Routine -----------------
-def create_patient_routine(uid: str, email: str, role: str, created_at: datetime):
-    routine_data = generate_four_week_routine(created_at)
-
-    tasks_array = [{"tasks": []} for _ in range(17)]
-
-    routine_doc = {
-        "uid": uid,
-        "email": email,
-        "role": role,
-        "createdAt": created_at,
-        "routines": routine_data,
-        "tasks": tasks_array
-    }
-
-    db.collection("daily_routines").document(uid).set(routine_doc)
-    print(f"✅ Routine created for patient {uid}")
-
-
 # ----------------- Pydantic Models -----------------
 class SingleSlotUpdate(BaseModel):
     date: str
@@ -118,8 +98,8 @@ def update_hour_slots(request: HourSlotsUpdate, user=Depends(verify_bearer_token
 @router.get("/get-day-routine")
 def get_day_routine(date: str, user=Depends(verify_bearer_token)):
     uid = user["uid"]
-    doc = db.collection("daily_routines").document(uid).get()
 
+    doc = db.collection("daily_routines").document(uid).get()
     if not doc.exists:
         raise HTTPException(status_code=404, detail="Routine not found")
 
@@ -129,15 +109,27 @@ def get_day_routine(date: str, user=Depends(verify_bearer_token)):
     if routine is None:
         raise HTTPException(status_code=404, detail=f"No routine found for {date}")
 
-    # Ensure every hour has 4 slots (filled = True/False)
     transformed_routine = {}
-    for hour, tasks in routine.items():
+
+    for hour, hour_data in routine.items():
+        slots = hour_data.get("slots", {})
+
+        # ✅ Preserve filled values exactly as stored
         transformed_routine[hour] = {
-            "tasks": tasks,  # Keep original tasks per hour if you have them
-            "slots": {f"{hour[:2]}:{minute}": {"filled": False} for minute in ["00", "15", "30", "45"]}
+            "slots": {
+                slot_time: {
+                    "filled": slot_data.get("filled", False)
+                }
+                for slot_time, slot_data in slots.items()
+            }
         }
 
-    return {"uid": uid, "date": date, "routine": transformed_routine, "tasks": data.get("tasks", [])}
+    return {
+        "uid": uid,
+        "date": date,
+        "routine": transformed_routine,
+        "tasks": data.get("tasks", [])
+    }
 
 
 @router.patch("/update-tasks-array")
