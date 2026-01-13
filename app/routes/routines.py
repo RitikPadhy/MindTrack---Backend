@@ -81,29 +81,32 @@ def update_day_completion_granular(request: GranularCompletion, user=Depends(ver
     uid = user["uid"]
     doc_ref = db.collection("daily_routines").document(uid)
 
-    # 1. Prepare the update map
-    update_data = {}
+    # We build a real nested dictionary structure here
+    nested_data = {
+        "routines": {
+            request.date: {}
+        }
+    }
 
+    # Fill the nested dictionary
+    date_map = nested_data["routines"][request.date]
+    
     for hour, slots_map in request.hour_slots_status.items():
+        if hour not in date_map:
+            date_map[hour] = {"slots": {}}
+        
         for slot, slot_data in slots_map.items():
-            # slot_data is: {"filled": true, "taskIndex": 0}
-            filled = slot_data.get("filled")
-            task_index = slot_data.get("taskIndex")
+            date_map[hour]["slots"][slot] = {
+                "filled": slot_data.get("filled"),
+                "taskIndex": slot_data.get("taskIndex")
+            }
 
-            if filled is not None and task_index is not None:
-                # Path to the 'filled' boolean
-                update_data[f"routines.{request.date}.{hour}.slots.{slot}.filled"] = filled
-                # Path to the 'taskIndex' integer
-                update_data[f"routines.{request.date}.{hour}.slots.{slot}.taskIndex"] = task_index
-
-    if update_data:
+    if nested_data:
         try:
-            # 2. CRITICAL FIX: Use set with merge=True
-            # This allows Firestore to create the "routines" or "date" maps 
-            # if they don't exist yet for this user.
-            doc_ref.set(update_data, merge=True)
+            # Using set with merge=True on a nested dictionary 
+            # tells Firestore to merge the OBJECTS, not just the keys.
+            doc_ref.set(nested_data, merge=True)
         except Exception as e:
-            print(f"Firestore Error: {e}")
-            raise HTTPException(status_code=500, detail="Database update failed")
+            raise HTTPException(status_code=500, detail=str(e))
 
-    return {"message": f"Routine for {request.date} updated successfully"}
+    return {"message": "Success"}
