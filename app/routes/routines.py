@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import Dict, List
 from app.core.firebase import db
 from app.core.auth import verify_bearer_token
+from datetime import datetime, timedelta
 
 router = APIRouter()
 
@@ -38,22 +39,36 @@ class GranularCompletion(BaseModel):
     date: str
     hour_slots_status: Dict[str, Dict[str, SlotUpdate]]
 
+def transform_routine_for_flutter(date, routine):
+    # Flutter expects 6AM-10PM (17 hours)
+    hours = [f"{6+i:02d}:00" for i in range(17)]
+    schedule_data = []
+
+    for hour in hours:
+        hour_data = routine.get(hour, {})
+        slots = hour_data.get("slots", {})
+        tasks = hour_data.get("tasks", [])
+        schedule_data.append({
+            "hour": hour,
+            "tasks": tasks,
+            "slots": slots
+        })
+
+    return schedule_data
+
 
 @router.get("/get-day-routine")
 def get_day_routine(date: str, user=Depends(verify_bearer_token)):
     uid = user["uid"]
 
-    # Fetch user document
     doc = db.collection("daily_routines").document(uid).get()
     if not doc.exists:
         raise HTTPException(status_code=404, detail="Routine not found")
 
     data = doc.to_dict()
-    routine = data.get("routines", {}).get(date)
-    if routine is None:
-        raise HTTPException(status_code=404, detail=f"No routine found for {date}")
+    routine = data.get("routines", {}).get(date, {})
 
-    # Transform routine slots for Flutter
+    # Transform slots
     transformed_routine = {}
     for hour, hour_data in routine.items():
         slots = hour_data.get("slots", {})
@@ -67,17 +82,14 @@ def get_day_routine(date: str, user=Depends(verify_bearer_token)):
             }
         }
 
-    # Create tasks per hour
-    tasks_by_hour = {}
-    for hour, hour_data in routine.items():
-        # Ensure tasks exist as a list
-        tasks_by_hour[hour] = hour_data.get("tasks", [])
+    # Transform for Flutter
+    tasks_by_hour = transform_routine_for_flutter(date, routine)
 
     return {
         "uid": uid,
         "date": date,
         "routine": transformed_routine,
-        "tasks": tasks_by_hour  # now Flutter can read tasks per hour
+        "tasks": tasks_by_hour
     }
 
 @router.patch("/update-day")
