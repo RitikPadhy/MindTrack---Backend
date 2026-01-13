@@ -87,8 +87,13 @@ def update_day_completion_granular(request: GranularCompletion, user=Depends(ver
     update_data = {}
 
     for hour, slots_map in request.hour_slots_status.items():
-        for slot, tasks_map in slots_map.items():
-            for task_index, filled in tasks_map.items():
+        for slot, slot_data in slots_map.items():
+            # slot_data now contains {"filled": true, "taskIndex": 0}
+            filled = slot_data.get("filled")
+            task_index = slot_data.get("taskIndex")
+
+            # Only update if both are present
+            if filled is not None and task_index is not None:
                 update_data[f"routines.{request.date}.{hour}.slots.{slot}.tasks.{task_index}.filled"] = filled
 
     if update_data:
