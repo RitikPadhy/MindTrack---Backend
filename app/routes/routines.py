@@ -45,15 +45,36 @@ def get_day_routine(date: str, user=Depends(verify_bearer_token)):
         raise HTTPException(status_code=404, detail="Routine not found")
 
     data = doc.to_dict()
-    routine = data.get("routines", {}).get(date)
 
-    if routine is None:
-        raise HTTPException(status_code=404, detail=f"No routine found for {date}")
+    routines = data.get("routines", {})
+    day_routine = routines.get(date, {})
+
+    # Build a normalized 17-hour structure (06:00 → 22:00)
+    normalized = {}
+    base_hour = 6
+
+    for i in range(17):
+        hour = f"{base_hour + i:02d}:00"
+
+        existing = day_routine.get(hour, {})
+        slots = existing.get("slots", {})
+
+        # Ensure all 4 slots exist
+        hour_slots = {}
+        for m in ["00", "15", "30", "45"]:
+            key = f"{hour[:2]}:{m}"
+            slot = slots.get(key, {})
+            hour_slots[key] = {
+                "filled": bool(slot.get("filled", False)),
+                "taskIndex": slot.get("taskIndex", None),
+            }
+
+        normalized[hour] = {"slots": hour_slots}
 
     return {
         "uid": uid,
         "date": date,
-        "routine": routine,
+        "routine": normalized,
         "tasks": data.get("tasks", []),
     }
 
