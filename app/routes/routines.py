@@ -81,22 +81,29 @@ def update_day_completion_granular(request: GranularCompletion, user=Depends(ver
     uid = user["uid"]
     doc_ref = db.collection("daily_routines").document(uid)
 
-    if not doc_ref.get().exists:
-        raise HTTPException(status_code=404, detail="Routine not found")
-
+    # 1. Prepare the update map
     update_data = {}
 
     for hour, slots_map in request.hour_slots_status.items():
         for slot, slot_data in slots_map.items():
-            # slot_data now contains {"filled": true, "taskIndex": 0}
+            # slot_data is: {"filled": true, "taskIndex": 0}
             filled = slot_data.get("filled")
             task_index = slot_data.get("taskIndex")
 
-            # Only update if both are present
             if filled is not None and task_index is not None:
-                update_data[f"routines.{request.date}.{hour}.slots.{slot}.tasks.{task_index}.filled"] = filled
+                # Path to the 'filled' boolean
+                update_data[f"routines.{request.date}.{hour}.slots.{slot}.filled"] = filled
+                # Path to the 'taskIndex' integer
+                update_data[f"routines.{request.date}.{hour}.slots.{slot}.taskIndex"] = task_index
 
     if update_data:
-        doc_ref.update(update_data)
+        try:
+            # 2. CRITICAL FIX: Use set with merge=True
+            # This allows Firestore to create the "routines" or "date" maps 
+            # if they don't exist yet for this user.
+            doc_ref.set(update_data, merge=True)
+        except Exception as e:
+            print(f"Firestore Error: {e}")
+            raise HTTPException(status_code=500, detail="Database update failed")
 
     return {"message": f"Routine for {request.date} updated successfully"}
