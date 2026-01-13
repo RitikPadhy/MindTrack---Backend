@@ -40,16 +40,17 @@ class GranularCompletion(BaseModel):
     hour_slots_status: Dict[str, Dict[str, SlotUpdate]]
 
 def transform_routine_for_flutter(date, routine):
-    # Flutter expects 6AM-10PM (17 hours)
-    hours = [f"{6+i:02d}:00" for i in range(17)]
+    """Return a list of 17 hours (6AM-10PM) for Flutter, each with tasks and slots."""
     schedule_data = []
 
-    for hour in hours:
-        hour_data = routine.get(hour, {})
-        slots = hour_data.get("slots", {})
-        tasks = hour_data.get("tasks", [])
+    for i in range(17):
+        hour_str = f"{6 + i:02d}:00"  # 6:00 -> 22:00
+        hour_data = routine.get(hour_str, {})
+        tasks = hour_data.get("tasks", [])  # fallback to empty list
+        slots = hour_data.get("slots", {})  # fallback to empty dict
+
         schedule_data.append({
-            "hour": hour,
+            "hour": hour_str,
             "tasks": tasks,
             "slots": slots
         })
@@ -68,7 +69,7 @@ def get_day_routine(date: str, user=Depends(verify_bearer_token)):
     data = doc.to_dict()
     routine = data.get("routines", {}).get(date, {})
 
-    # Transform slots
+    # Transform slots for API response
     transformed_routine = {}
     for hour, hour_data in routine.items():
         slots = hour_data.get("slots", {})
@@ -82,7 +83,7 @@ def get_day_routine(date: str, user=Depends(verify_bearer_token)):
             }
         }
 
-    # Transform for Flutter
+    # Transform for Flutter: 17 hours guaranteed
     tasks_by_hour = transform_routine_for_flutter(date, routine)
 
     return {
