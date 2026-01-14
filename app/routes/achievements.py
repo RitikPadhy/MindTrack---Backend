@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends
 from app.core.firebase import db
 from app.core.auth import verify_bearer_token
 
@@ -14,11 +14,9 @@ def get_last_7_days():
 @router.get("/messages")
 def get_achievements(user=Depends(verify_bearer_token)):
     uid = user["uid"]
-    doc_ref = db.collection("daily_routines").document(uid)
-    doc = doc_ref.get()
+    doc = db.collection("daily_routines").document(uid).get()
 
     if not doc.exists:
-        # Default if no routine assigned yet
         return [
             {"title": "Welcome!", "message1": "Your journey starts today 🌱", "message2": "Once you begin logging routines, achievements will appear here."},
             {"title": "No Data Yet", "message1": "Try adding activities this week", "message2": "Small steps make real change."},
@@ -31,10 +29,6 @@ def get_achievements(user=Depends(verify_bearer_token)):
 
     last_7_days = get_last_7_days()
 
-    # Ensure tasks_array has length 17 minimum
-    while len(tasks_array) < 17:
-        tasks_array.append({"tasks": []})
-
     days_with_activity = 0
     total_filled_slots = 0
     category_set = set()
@@ -46,36 +40,31 @@ def get_achievements(user=Depends(verify_bearer_token)):
 
         day_has_activity = False
 
-        # Activity Detection + Hours
         for hour_data in day_data.values():
             slots = hour_data.get("slots", {})
             for slot in slots.values():
-                if slot.get("filled", False):
-                    day_has_activity = True
-                    total_filled_slots += 1
+                if not slot.get("filled"):
+                    continue
+
+                day_has_activity = True
+                total_filled_slots += 1
+
+                task_index = slot.get("taskIndex")
+                if task_index is None or task_index >= len(tasks_array):
+                    continue
+
+                task_entry = tasks_array[task_index]
+                if "items" in task_entry:
+                    for item in task_entry.get("items", []):
+                        if isinstance(item, dict) and "category" in item:
+                            category_set.add(item["category"])
 
         if day_has_activity:
             days_with_activity += 1
 
-        # Categories Used
-        for hour_index, hour_tasks in enumerate(tasks_array):
-            # Handle both formats: {"tasks": [...]} (old) and {"items": [...]} (new from web interface)
-            if "items" in hour_tasks:
-                # New format: items is a list of objects with "title" and "category"
-                items = hour_tasks.get("items", [])
-                for item in items:
-                    if isinstance(item, dict) and "category" in item:
-                        category_set.add(item["category"])
-            elif "tasks" in hour_tasks:
-                # Old format: tasks is a list of strings (legacy, may not have categories)
-                # Skip categories for old format as it doesn't store category info
-                pass
-
-    # Convert slots → hours (each slot = 15 min)
     total_hours = (total_filled_slots * 15) / 60
 
     # ---- BADGES ----
-    # Consistency
     if days_with_activity >= 7:
         consistency = ("Habit Hero", "7-day streak — gentle but powerful")
     elif days_with_activity >= 5:
@@ -85,7 +74,6 @@ def get_achievements(user=Depends(verify_bearer_token)):
     else:
         consistency = ("Keep Going!", "You're building momentum — show up tomorrow 💛")
 
-    # Variety
     unique_categories = len(category_set)
     if unique_categories >= 7:
         variety = ("Whole-Self Nurturer", "Achieved full life-area balance")
@@ -96,7 +84,6 @@ def get_achievements(user=Depends(verify_bearer_token)):
     else:
         variety = ("Beginner's Path", "Try adding different types of activities 🌱")
 
-    # Time Spent
     if total_hours >= 10:
         time_spent = ("Time Alchemist", "10+ hours of meaningful activity")
     elif total_hours >= 5:
