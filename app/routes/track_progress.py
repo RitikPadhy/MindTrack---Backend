@@ -18,7 +18,10 @@ def get_dates(period: str):
 
     elif period == "month":
         start = today.replace(day=1)
-        next_month = start.replace(month=start.month % 12 + 1, day=1)
+        if start.month == 12:
+            next_month = start.replace(year=start.year + 1, month=1)
+        else:
+            next_month = start.replace(month=start.month + 1)
         days_in_month = (next_month - start).days
         return [(start + timedelta(days=i)).isoformat() for i in range(days_in_month)]
 
@@ -30,52 +33,58 @@ def compute_task_progress(doc_data, dates):
     task_list = doc_data.get("tasks", [])
     routines = doc_data.get("routines", {})
 
-    task_stats = {}  # {task_name: {"filled": x, "total": y}}
+    task_stats = {}  # {task_name: {"filled": int, "total": int}}
 
     for day in dates:
         day_data = routines.get(day, {})
         if not day_data:
             continue
 
-        # Iterate by hour in the day
-        for idx, (hour, hour_data) in enumerate(sorted(day_data.items())):
-            if idx >= len(task_list):
-                continue  # safety
-
-            # Get first task name for this hour
-            # Handle both formats: {"tasks": [...]} (old) and {"items": [...]} (new from web interface)
-            task_name = None
-            if "items" in task_list[idx]:
-                # New format: items is a list of objects with "title" and "category"
-                items = task_list[idx].get("items", [])
-                if items and isinstance(items[0], dict) and "title" in items[0]:
-                    task_name = items[0]["title"]
-            elif "tasks" in task_list[idx]:
-                # Old format: tasks is a list of strings
-                tasks_for_hour = task_list[idx].get("tasks", [])
-                if tasks_for_hour:
-                    task_name = tasks_for_hour[0] if isinstance(tasks_for_hour[0], str) else str(tasks_for_hour[0])
-            
-            if not task_name:
-                continue
-
-            # Initialize aggregate bucket
-            if task_name not in task_stats:
-                task_stats[task_name] = {"filled": 0, "total": 0}
-
+        for hour_data in day_data.values():
             slots = hour_data.get("slots", {})
+
             for slot in slots.values():
+                task_index = slot.get("taskIndex")
+                if task_index is None:
+                    continue
+
+                if not isinstance(task_index, int):
+                    continue
+
+                if task_index >= len(task_list):
+                    continue
+
+                task_entry = task_list[task_index]
+                task_name = None
+
+                # New format (web)
+                if "items" in task_entry:
+                    items = task_entry.get("items", [])
+                    if items and isinstance(items[0], dict):
+                        task_name = items[0].get("title")
+
+                # Old format (mobile)
+                elif "tasks" in task_entry:
+                    tasks = task_entry.get("tasks", [])
+                    if tasks:
+                        task_name = tasks[0] if isinstance(tasks[0], str) else str(tasks[0])
+
+                if not task_name:
+                    continue
+
+                if task_name not in task_stats:
+                    task_stats[task_name] = {"filled": 0, "total": 0}
+
                 task_stats[task_name]["total"] += 1
-                if slot.get("filled"):
+                if slot.get("filled") is True:
                     task_stats[task_name]["filled"] += 1
 
-    # Convert to %
     results = []
     for task, stats in task_stats.items():
-        if stats["total"] == 0:
-            percentage = 0.0
-        else:
-            percentage = round((stats["filled"] / stats["total"]) * 100, 2)
+        percentage = (
+            round((stats["filled"] / stats["total"]) * 100, 2)
+            if stats["total"] > 0 else 0.0
+        )
 
         results.append({
             "task": task,
@@ -84,7 +93,6 @@ def compute_task_progress(doc_data, dates):
             "total_slots": stats["total"]
         })
 
-    # return top 5 highest %
     results.sort(key=lambda x: x["percentage_done"], reverse=True)
     return results[:5]
 
