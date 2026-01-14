@@ -65,14 +65,24 @@ def update_week(feedback: WeeklyFeedbackUpdate, user=Depends(verify_bearer_token
     if feedback.week_number not in [1, 2, 3, 4]:
         raise HTTPException(status_code=400, detail="Week number must be between 1 and 4")
 
+    # ---------------- Clamp values to max 5 ----------------
+    def clamp(val: float) -> float:
+        return max(0.0, min(val, 5.0))
+
+    energy = clamp(feedback.energy_levels)
+    satisfaction = clamp(feedback.satisfaction)
+    happiness = clamp(feedback.happiness)
+    proud = clamp(feedback.proud_of_achievements)
+    busy = clamp(feedback.how_busy)
+
     # Update all 5 metrics at once
     field_path = f"weeks.{str(feedback.week_number)}"
     doc_ref.update({field_path: {
-        "energy_levels": float(feedback.energy_levels),
-        "satisfaction": float(feedback.satisfaction),
-        "happiness": float(feedback.happiness),
-        "proud_of_achievements": float(feedback.proud_of_achievements),
-        "how_busy": float(feedback.how_busy),
+        "energy_levels": float(energy),
+        "satisfaction": float(satisfaction),
+        "happiness": float(happiness),
+        "proud_of_achievements": float(proud),
+        "how_busy": float(busy),
         "feedback_text": feedback.feedback_text or ""
     }})
 
