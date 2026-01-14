@@ -86,7 +86,9 @@ def update_day_completion_granular(
 
     updates = {}
 
-    for hour, slots_map in request.hour_slots_status.items():
+    for hour, hour_data in request.hour_slots_status.items():
+        # hour_data is like {"slots": { "06:15": {...}, ... }}
+        slots_map = hour_data.get("slots", {})
         for slot, slot_data in slots_map.items():
             base_path = f"routines.{request.date}.{hour}.slots.{slot}"
             updates[f"{base_path}.filled"] = slot_data.get("filled")
