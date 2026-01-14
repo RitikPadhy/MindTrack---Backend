@@ -77,36 +77,31 @@ def get_day_routine(date: str, user=Depends(verify_bearer_token)):
     }
 
 @router.patch("/update-day")
-def update_day_completion_granular(request: GranularCompletion, user=Depends(verify_bearer_token)):
+def update_day_completion_granular(
+    request: GranularCompletion,
+    user=Depends(verify_bearer_token)
+):
     uid = user["uid"]
     doc_ref = db.collection("daily_routines").document(uid)
 
-    # We build a real nested dictionary structure here
-    nested_data = {
-        "routines": {
-            request.date: {}
-        }
-    }
+    updates = {}
 
-    # Fill the nested dictionary
-    date_map = nested_data["routines"][request.date]
-    
     for hour, slots_map in request.hour_slots_status.items():
-        if hour not in date_map:
-            date_map[hour] = {"slots": {}}
-        
         for slot, slot_data in slots_map.items():
-            date_map[hour]["slots"][slot] = {
-                "filled": slot_data.get("filled"),
-                "taskIndex": slot_data.get("taskIndex")
-            }
+            base_path = f"routines.{request.date}.{hour}.slots.{slot}"
+            updates[f"{base_path}.filled"] = slot_data.get("filled")
+            updates[f"{base_path}.taskIndex"] = slot_data.get("taskIndex")
 
-    if nested_data:
-        try:
-            # Using set with merge=True on a nested dictionary 
-            # tells Firestore to merge the OBJECTS, not just the keys.
-            doc_ref.set(nested_data, merge=True)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+    if not updates:
+        return {"message": "Nothing to update"}
 
-    return {"message": "Success"}
+    try:
+        doc_ref.update(updates)
+    except firestore.NotFound:
+        # Create doc if missing
+        doc_ref.set({}, merge=True)
+        doc_ref.update(updates)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"message": "Updated successfully"}
