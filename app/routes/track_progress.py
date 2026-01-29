@@ -16,20 +16,28 @@ def get_dates(period: str):
     elif period == "week":
         # Last 7 days INCLUDING today
         start = today - timedelta(days=6)
-        return [
-            (start + timedelta(days=i)).isoformat()
-            for i in range(7)
-        ]
+        return [(start + timedelta(days=i)).isoformat() for i in range(7)]
 
     elif period == "month":
         # Last 30 days INCLUDING today
         start = today - timedelta(days=29)
-        return [
-            (start + timedelta(days=i)).isoformat()
-            for i in range(30)
-        ]
+        return [(start + timedelta(days=i)).isoformat() for i in range(30)]
 
     raise ValueError("Invalid period. Use day, week, or month.")
+
+
+# ----------------- Helpers -----------------
+def hour_sort_key(hour_str: str) -> int:
+    """
+    Supports:
+      '13'
+      '13:00'
+      '09:30'
+    """
+    try:
+        return int(hour_str.split(":")[0])
+    except Exception:
+        return 0
 
 
 # ----------------- Core Calculation -----------------
@@ -44,9 +52,8 @@ def compute_task_progress(doc_data, dates):
         if not day_data:
             continue
 
-        # Sort hours numerically instead of lexicographically
         for idx, (hour, hour_data) in enumerate(
-            sorted(day_data.items(), key=lambda x: int(x[0]))
+            sorted(day_data.items(), key=lambda x: hour_sort_key(x[0]))
         ):
             if idx >= len(task_list):
                 continue
@@ -54,7 +61,7 @@ def compute_task_progress(doc_data, dates):
             task_name = None
             template = task_list[idx]
 
-            # New format from web interface
+            # New format
             if isinstance(template, dict) and "items" in template:
                 items = template.get("items", [])
                 if items and isinstance(items[0], dict):
@@ -73,7 +80,6 @@ def compute_task_progress(doc_data, dates):
             if not task_name:
                 continue
 
-            # Initialize aggregate bucket
             task_stats.setdefault(task_name, {"filled": 0, "total": 0})
 
             slots = hour_data.get("slots", {})
@@ -99,7 +105,6 @@ def compute_task_progress(doc_data, dates):
             }
         )
 
-    # Return top 5 highest %
     results.sort(key=lambda x: x["percentage_done"], reverse=True)
     return results[:5]
 
