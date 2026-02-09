@@ -87,11 +87,15 @@ def update_day_completion_granular(
     updates = {}
 
     for hour, hour_data in request.hour_slots_status.items():
-        # hour_data is like {"slots": { "06:15": {...}, ... }}
+        # hour_data is like {"slots": { "06:15": {"filled": true, "taskIndex": 0}, ... }}
         slots_map = hour_data.get("slots", {})
+        
+        # To provide 100% assurance, we ensure that if an hour is sent, 
+        # we update the slots provided. The Flutter app now sends the 
+        # state of the slots it has.
         for slot, slot_data in slots_map.items():
             base_path = f"routines.{request.date}.{hour}.slots.{slot}"
-            updates[f"{base_path}.filled"] = slot_data.get("filled")
+            updates[f"{base_path}.filled"] = bool(slot_data.get("filled", False))
             updates[f"{base_path}.taskIndex"] = slot_data.get("taskIndex")
 
     if not updates:
