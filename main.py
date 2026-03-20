@@ -28,7 +28,7 @@ app.include_router(reading.router, prefix="/reading", tags=["reading"])
 app.include_router(track_progress.router, prefix="/track_progress", tags=["track_progress"])
 app.include_router(achievements.router, prefix="/achievements", tags=["achievements"])
 app.include_router(question.router, prefix="/question", tags=["question"])
-app.include_router(user_categories.router, prefix="/analytics", tags=["analytics"])
+app.include_router(user_categories.router, prefix="/user_categories", tags=["user_categories"])
 
 # ---------- Root endpoint ----------
 @app.get("/")
